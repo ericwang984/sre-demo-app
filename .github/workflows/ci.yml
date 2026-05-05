@@ -94,8 +94,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ericwang984/sre-gitops-platform
-          token: ${{ secrets.GITOPS_TOKEN || github.token }}
+          token: ${{ secrets.GITOPS_TOKEN }}
           persist-credentials: true
+
+      - name: Verify GITOPS_TOKEN is set
+        run: |
+          if [ -z "${{ secrets.GITOPS_TOKEN }}" ]; then
+            echo "ERROR: GITOPS_TOKEN secret is not set!"
+            echo "Please create a PAT with 'repo' scope and add it as a secret named GITOPS_TOKEN"
+            exit 1
+          fi
 
       - name: Install yq for YAML editing
         run: |
