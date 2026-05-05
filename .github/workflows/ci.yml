@@ -87,7 +87,7 @@ jobs:
   # Gate 3: Update GitOps Repository
   update-gitops:
     needs: build-and-scan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout GitOps repository
@@ -96,14 +96,6 @@ jobs:
           repository: ericwang984/sre-gitops-platform
           token: ${{ secrets.GITOPS_TOKEN }}
           persist-credentials: true
-
-      - name: Verify GITOPS_TOKEN is set
-        run: |
-          if [ -z "${{ secrets.GITOPS_TOKEN }}" ]; then
-            echo "ERROR: GITOPS_TOKEN secret is not set!"
-            echo "Please create a PAT with 'repo' scope and add it as a secret named GITOPS_TOKEN"
-            exit 1
-          fi
 
       - name: Install yq for YAML editing
         run: |
@@ -115,10 +107,22 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Set environment variables for tagged release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          echo "IMAGE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          echo "KUSTOMIZE_FILE=apps/demo-app/overlays/prod/kustomization.yaml" >> $GITHUB_ENV
+          echo "ENV_TYPE=Production" >> $GITHUB_ENV
+
+      - name: Set environment variables for dev
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
+          echo "KUSTOMIZE_FILE=apps/demo-app/overlays/dev/kustomization.yaml" >> $GITHUB_ENV
+          echo "ENV_TYPE=Development" >> $GITHUB_ENV
+
       - name: Update kustomization.yaml
         run: |
-          KUSTOMIZE_FILE="apps/demo-app/overlays/dev/kustomization.yaml"
-
           # Check if the kustomization file exists
           if [ ! -f "$KUSTOMIZE_FILE" ]; then
             echo "Error: $KUSTOMIZE_FILE not found!"
@@ -126,15 +130,15 @@ jobs:
           fi
 
           # Update the image tag
-          yq eval ".images[0].newTag = \"${{ github.sha }}\"" -i "$KUSTOMIZE_FILE"
+          yq eval ".images[0].newTag = \"${{ env.IMAGE_TAG }}\"" -i "$KUSTOMIZE_FILE"
 
-          echo "Updated $KUSTOMIZE_FILE with tag: ${{ github.sha }}"
+          echo "Updated $KUSTOMIZE_FILE ($ENV_TYPE) with tag: ${{ env.IMAGE_TAG }}"
           cat "$KUSTOMIZE_FILE"
 
       - name: Commit and push changes
         run: |
-          git add apps/demo-app/overlays/dev/kustomization.yaml
-          git diff --staged --quiet || git commit -m "Update demo-app image to ${{ github.sha }}"
+          git add ${{ env.KUSTOMIZE_FILE }}
+          git diff --staged --quiet || git commit -m "Update demo-app ${{ env.ENV_TYPE }} image to ${{ env.IMAGE_TAG }}"
           git push origin main
         env:
           GIT_AUTHOR_NAME: github-actions[bot]
