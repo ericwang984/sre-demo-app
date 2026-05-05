@@ -64,6 +64,18 @@ async def get_orders(limit: int = 10):
     return ORDERS[:limit]
 
 
+@app.get("/api/orders/stats")
+async def get_order_stats():
+    """Get order statistics - demonstrates business logic."""
+    total_orders = len(ORDERS)
+    total_value = sum(order["total"] for order in ORDERS)
+    return {
+        "total_orders": total_orders,
+        "total_value": total_value,
+        "average_value": total_value / total_orders if total_orders > 0 else 0
+    }
+
+
 @app.get("/api/orders/{order_id}")
 async def get_order(order_id: int):
     """Get a specific order by ID."""
@@ -101,18 +113,6 @@ async def flaky_response():
     if random.random() < 0.5:
         raise HTTPException(status_code=500, detail="Random failure (50% chance)")
     return {"message": "Success this time!", "flaky": True}
-
-
-@app.get("/api/orders/stats")
-async def get_order_stats():
-    """Get order statistics - demonstrates business logic."""
-    total_orders = len(ORDERS)
-    total_value = sum(order["total"] for order in ORDERS)
-    return {
-        "total_orders": total_orders,
-        "total_value": total_value,
-        "average_value": total_value / total_orders if total_orders > 0 else 0
-    }
 
 
 if __name__ == "__main__":
