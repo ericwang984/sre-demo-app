@@ -24,7 +24,7 @@ ORDERS = [
 # Dependency check flag
 READY = True
 
-
+# This is for test
 @app.get("/")
 async def root():
     """Root endpoint with API information."""
