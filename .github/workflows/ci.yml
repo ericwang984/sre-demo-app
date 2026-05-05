@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: ["main"]
+    tags:
+      - "v*.*.*"
   pull_request:
     branches: ["main"]
 
@@ -44,6 +46,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Extract version from tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
       - name: Build image
         run: docker build -t demo-api:${{ github.sha }} .
 
@@ -62,8 +68,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push to GHCR
-        if: github.event_name != 'pull_request'
+      - name: Push to GHCR (tagged version)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          docker tag demo-api:${{ github.sha }} ghcr.io/${{ github.repository }}:${{ env.VERSION }}
+          docker tag demo-api:${{ github.sha }} ghcr.io/${{ github.repository }}:latest
+          docker push ghcr.io/${{ github.repository }}:${{ env.VERSION }}
+          docker push ghcr.io/${{ github.repository }}:latest
+
+      - name: Push to GHCR (regular commit)
+        if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
         run: |
           docker tag demo-api:${{ github.sha }} ghcr.io/${{ github.repository }}:${{ github.sha }}
           docker tag demo-api:${{ github.sha }} ghcr.io/${{ github.repository }}:latest
