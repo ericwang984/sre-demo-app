@@ -1,12 +1,25 @@
 # Stage 1: Builder
 FROM python:3.12-slim AS builder
 WORKDIR /app
+
+# Install security updates and build dependencies
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 COPY app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Stage 2: Runtime
 FROM python:3.12-slim
 WORKDIR /app
+
+# Install security updates
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Non-root user for security
 RUN useradd -m -u 1000 appuser
