@@ -83,3 +83,52 @@ jobs:
           docker tag demo-api:${{ github.sha }} ghcr.io/${{ github.repository }}:latest
           docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
           docker push ghcr.io/${{ github.repository }}:latest
+
+  # Gate 3: Update GitOps Repository
+  update-gitops:
+    needs: build-and-scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          repository: ericwang984/sre-gitops-platform
+          token: ${{ secrets.GITOPS_TOKEN }}
+
+      - name: Install yq for YAML editing
+        run: |
+          wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update kustomization.yaml
+        run: |
+          KUSTOMIZE_FILE="apps/demo-app/overlays/dev/kustomization.yaml"
+
+          # Check if the kustomization file exists
+          if [ ! -f "$KUSTOMIZE_FILE" ]; then
+            echo "Error: $KUSTOMIZE_FILE not found!"
+            exit 1
+          fi
+
+          # Update the image tag
+          yq eval ".images[0].newTag = \"${{ github.sha }}\"" -i "$KUSTOMIZE_FILE"
+
+          echo "Updated $KUSTOMIZE_FILE with tag: ${{ github.sha }}"
+          cat "$KUSTOMIZE_FILE"
+
+      - name: Commit and push changes
+        run: |
+          git add apps/demo-app/overlays/dev/kustomization.yaml
+          git diff --staged --quiet || git commit -m "Update demo-app image to ${{ github.sha }}"
+          git push origin main
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
